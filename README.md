@@ -16,8 +16,8 @@ Then:
 
 ```bash
 az webapp show \
-  --resource-group cloudcomputinglab \
-  --name azure-node-web-app \
+  --resource-group azure_cloud_computing \
+  --name azure-node \
   --query "{name:name,state:state,hostName:defaultHostName,kind:kind}" \
   --output table
 ```
@@ -116,7 +116,7 @@ Microsoft documents **Website Contributor** as the role used to grant the identi
 Now we need Azure to trust GitHub Actions from this exact repository:
 
 ```text
-404khai/azure-app
+Quaintbrake5/azure-app
 ```
 
 Run:
@@ -127,13 +127,13 @@ az identity federated-credential create \
   --identity-name azure-node-web-app-github \
   --resource-group cloudcomputinglab \
   --issuer https://token.actions.githubusercontent.com \
-  --subject repo:404khai/azure-app:ref:refs/heads/main \
+  --subject repo:Quaintbrake5/azure-app:ref:refs/heads/main \
   --audiences api://AzureADTokenExchange
 ```
 
 This means:
 
-> Allow GitHub Actions running from `404khai/azure-app` on the `main` branch to authenticate as this Azure identity.
+> Allow GitHub Actions running from `Quaintbrake5/azure-app` on the `main` branch to authenticate as this Azure identity.
 
 This replaces the problematic GitHub `SourceControlToken` connection.
 
@@ -178,7 +178,7 @@ xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 Open your repository:
 
-**GitHub → `404khai/azure-app`**
+**GitHub → `Quaintbrake5/azure-app`**
 
 Then:
 
@@ -318,7 +318,7 @@ git push origin main
 
 Then go to:
 
-**GitHub → `404khai/azure-app` → Actions**
+**GitHub → `Quaintbrake5/azure-app` → Actions**
 
 You should see:
 
@@ -397,13 +397,13 @@ The important line is:
 
 ```text
 presented assertion subject
-'repo:404khai@160283456/azure-app@1329745931:ref:refs/heads/main'
+'repo:Quaintbrake5/azure-app@1329745931:ref:refs/heads/main'
 ```
 
 But the federated credential we created was:
 
 ```text
-repo:404khai/azure-app:ref:refs/heads/main
+repo:Quaintbrake5/azure-app:ref:refs/heads/main
 ```
 
 Those do **not** match, so Azure rejects the GitHub token. Microsoft requires the federated credential's subject to match the GitHub OIDC subject exactly.
@@ -422,7 +422,7 @@ az identity federated-credential list \
 You'll probably see the old subject:
 
 ```text
-repo:404khai/azure-app:ref:refs/heads/main
+repo:Quaintbrake5/azure-app:ref:refs/heads/main
 ```
 
 ### 1.2 Delete the incorrect credential
@@ -447,7 +447,7 @@ az identity federated-credential create \
   --identity-name azure-node-web-app-github \
   --resource-group cloudcomputinglab \
   --issuer "https://token.actions.githubusercontent.com" \
-  --subject "repo:404khai@160283456/azure-app@1329745931:ref:refs/heads/main" \
+  --subject "repo:Quaintbrake5/azure-app@1329745931:ref:refs/heads/main" \
   --audiences "api://AzureADTokenExchange"
 ```
 
@@ -463,7 +463,7 @@ az identity federated-credential list \
 The subject should now contain:
 
 ```text
-repo:404khai@160283456/azure-app@1329745931:ref:refs/heads/main
+repo:Quaintbrake5/azure-app@1329745931:ref:refs/heads/main
 ```
 
 ---
