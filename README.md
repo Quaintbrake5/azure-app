@@ -102,68 +102,137 @@ server.js
 
 Add:
 
-```bash
-az identity show \
-  --name azure-node-web-app-github \
-  --resource-group cloudcomputinglab \
-  --query id \
-  --output tsv
+```javascript
+const express = require("express");
+
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+    res.send(`
+        <h1>Hello from Azure App Service!</h1>
+        <p>This application is running on Azure.</p>
+    `);
+});
+
+app.get("/students", (req, res) => {
+    res.json([
+        {
+            name: "Student 1",
+            course: "Python"
+        },
+        {
+            name: "Student 2",
+            course: "Java"
+        }
+    ]);
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
 ```
 
----
+## 4. Configure package.json
 
-## 4. Give the Identity Permission to Deploy
+Your `package.json` should contain a start script.
 
-This is important.
+Example:
+
+```json
+{
+  "name": "azure-app",
+  "version": "1.0.0",
+  "description": "Simple Express application deployed to Azure",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
+```
+
+The important part is:
+
+```json
+"scripts": {
+    "start": "node server.js"
+}
+```
+
+Azure App Service uses this to start your application.
+
+## 5. Test the Application Locally
 
 Run:
 
 ```bash
-az role assignment create \
-  --assignee-object-id "$(az identity show \
-    --name azure-node-web-app-github \
-    --resource-group cloudcomputinglab \
-    --query principalId -o tsv)" \
-  --assignee-principal-type ServicePrincipal \
-  --role "Website Contributor" \
-  --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/cloudcomputinglab/providers/Microsoft.Web/sites/azure-node-web-app"
+npm start
 ```
 
-Microsoft documents **Website Contributor** as the role used to grant the identity permission to deploy to the App Service.
+You should see:
 
----
-
-## 5. Create the GitHub OIDC Connection
-
-Now we need Azure to trust GitHub Actions from this exact repository:
-
-```text
-404khai/azure-app
+```
+Server running on port 3000
 ```
 
-Run:
+Open:
 
-```bash
-az identity federated-credential create \
-  --name github-azure-app \
-  --identity-name azure-node-web-app-github \
-  --resource-group cloudcomputinglab \
-  --issuer https://token.actions.githubusercontent.com \
-  --subject repo:404khai/azure-app:ref:refs/heads/main \
-  --audiences api://AzureADTokenExchange
+```
+http://localhost:3000
 ```
 
-This means:
+You should see:
 
-> Allow GitHub Actions running from `404khai/azure-app` on the `main` branch to authenticate as this Azure identity.
+```
+Hello from Azure App Service!
+```
 
-This replaces the problematic GitHub `SourceControlToken` connection.
+Also test:
 
----
+```
+http://localhost:3000/students
+```
 
-## 6. Get the Three Values GitHub Needs
+You should receive JSON similar to:
 
-Run:
+```json
+[
+  {
+    "name": "Student 1",
+    "course": "Python"
+  },
+  {
+    "name": "Student 2",
+    "course": "Java"
+  }
+]
+```
+
+## 6. Create a GitHub Repository
+
+Create a repository on GitHub.
+
+For example:
+
+```
+azure-app
+```
+
+Do not upload secrets such as:
+
+- Passwords
+- API keys
+- Azure credentials
+- Private keys
+- Connection strings containing passwords
+
+## 7. Push the Project to GitHub
+
+Initialize Git:
 
 ```bash
 git init
@@ -196,60 +265,52 @@ git push -u origin main
 
 Your repository should now contain something similar to:
 
-```text
-CLIENT ID:
-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-TENANT ID:
-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-SUBSCRIPTION ID:
-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+azure-app/
+│
+├── server.js
+├── package.json
+├── package-lock.json
+└── .gitignore
 ```
 
-**Don't send these values to anyone unnecessarily.**
+## 8. Connect GitHub to Azure App Service
 
----
+Open the Azure Portal.
 
-## 7. Add the Values to GitHub
+Go to:
 
-Open your repository:
+> Azure Portal → App Services → YOUR APP SERVICE → Deployment Center
 
-**GitHub → `404khai/azure-app`**
+Choose:
 
-Then:
+- Source: GitHub
 
-**Settings → Secrets and variables → Actions**
+Choose:
 
-Click:
+- Build provider: GitHub Actions
 
-**New repository secret**
+Select:
 
-Create these three secrets.
+- GitHub account
+- Repository
+- Branch: main
 
-### Secret 1
+For the runtime:
 
-Name:
+- Node
 
-```text
-AZURE_CLIENT_ID
-```
+Use a current supported Node version.
 
-Value:
+For example:
 
-```text
-your client ID
-```
+- Node 24
 
-### Secret 2
+Azure will generate a GitHub Actions workflow.
 
-Name:
+## 9. Understand the Generated Workflow
 
-```text
-AZURE_TENANT_ID
-```
-
-Value:
+Azure may generate a file similar to:
 
 ```
 .github/
@@ -397,16 +458,30 @@ The values come from Azure.
 You can retrieve your subscription ID with:
 
 ```bash
-git add .github/workflows/deploy.yml
-git commit -m "ci: deploy to Azure App Service"
-git push origin main
+az account show --query id -o tsv
 ```
 
-Then go to:
+Retrieve your tenant ID:
 
-**GitHub → `404khai/azure-app` → Actions**
+```bash
+az account show --query tenantId -o tsv
+```
 
-You should see:
+If using a user-assigned managed identity, retrieve its client ID:
+
+```bash
+az identity show \
+  --name YOUR_IDENTITY_NAME \
+  --resource-group YOUR_RESOURCE_GROUP \
+  --query clientId \
+  -o tsv
+```
+
+Never publish these values in your GitHub repository.
+
+## 13. GitHub Actions OIDC Authentication
+
+The workflow uses:
 
 ```yaml
 permissions:
@@ -513,23 +588,30 @@ The federated identity credential tells Azure:
 
 The issuer is:
 
-```text
-presented assertion subject
-'repo:404khai@160283456/azure-app@1329745931:ref:refs/heads/main'
+```
+https://token.actions.githubusercontent.com
 ```
 
-But the federated credential we created was:
+The audience is:
 
-```text
-repo:404khai/azure-app:ref:refs/heads/main
+```
+api://AzureADTokenExchange
+```
+
+The subject must match the subject GitHub sends.
+
+For many repositories, this looks like:
+
+```
+repo:USERNAME/REPOSITORY:ref:refs/heads/main
 ```
 
 However, newer GitHub repositories may use an immutable repository identity in the OIDC subject.
 
 For example, GitHub Actions may display something like:
 
-```text
-repo:404khai/azure-app:ref:refs/heads/main
+```
+repo:USERNAME@REPOSITORY_ID/REPOSITORY@OWNER_ID:ref:refs/heads/main
 ```
 
 Do not guess the subject.
@@ -551,7 +633,7 @@ az identity federated-credential create \
   --identity-name YOUR_IDENTITY_NAME \
   --resource-group YOUR_RESOURCE_GROUP \
   --issuer "https://token.actions.githubusercontent.com" \
-  --subject "repo:404khai@160283456/azure-app@1329745931:ref:refs/heads/main" \
+  --subject "YOUR_EXACT_GITHUB_SUBJECT" \
   --audiences "api://AzureADTokenExchange"
 ```
 
@@ -582,17 +664,31 @@ Audience:
 api://AzureADTokenExchange
 ```
 
-The subject should now contain:
+The subject must match the GitHub Actions OIDC subject exactly.
 
-```text
-repo:404khai@160283456/azure-app@1329745931:ref:refs/heads/main
+## 18. Important: The Client ID Must Match the Identity
+
+A very common error is using the client ID from an old managed identity.
+
+For example:
+
+```
+Old identity
+     ↓
+old-client-id
 ```
 
----
+and:
 
-# 2. About the Node 20 Warning
+```
+New identity
+     ↓
+new-client-id
+```
 
-This:
+If the federated credential belongs to the new identity, GitHub must authenticate using the new identity's client ID.
+
+Check it with:
 
 ```bash
 az identity show \
